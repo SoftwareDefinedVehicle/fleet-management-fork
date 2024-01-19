@@ -33,6 +33,7 @@ create_common_mqtt_client_env() {
   ENABLE_HOSTNAME_VALIDATION=$4
   echo "Creating MQTT client properties file ${ENV_FILE_PATH} ..."
   cat <<EOF > "${ENV_FILE_PATH}"
+UP_MQTT_URI=mqtt://mosquitto:1883
 MQTT_URI=${URI}
 TRUST_STORE_PATH=${TRUST_STORE}
 ENABLE_HOSTNAME_VALIDATION=${ENABLE_HOSTNAME_VALIDATION}

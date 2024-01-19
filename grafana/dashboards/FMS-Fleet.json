@@ -1037,7 +1037,7 @@
         "definition": "import \"influxdata/influxdb/schema\"\n\nschema.tagValues(bucket: \"demo\", tag: \"vin\")\n",
         "description": "The VIN of selected vehicle",
         "hide": 0,
-        "includeAll": false,
+        "includeAll": true,
         "label": "VIN",
         "multi": true,
         "name": "selected_vin",

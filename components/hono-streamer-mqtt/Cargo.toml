@@ -1,0 +1,24 @@
+[package]
+name = "hono-streamer-mqtt"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+documentation.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { workspace = true, features = ["std", "env", "color", "help", "usage", "error-context", "suggestions"] }
+env_logger = { workspace = true }
+futures = { workspace = true }
+json = { version = "0.12" }
+log = { workspace = true }
+mqtt-transport = { workspace = true }
+paho-mqtt = { workspace = true, features = [ "vendored-ssl" ] }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+uprotocol-sdk = { workspace = true }
+urlencoding = { version = "2.1" }

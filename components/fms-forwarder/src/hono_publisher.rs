@@ -21,28 +21,28 @@ use async_trait::async_trait;
 use clap::{ArgMatches, Command};
 use fms_proto::fms::VehicleStatus;
 use log::{debug, warn};
-use mqtt::MessageBuilder;
-use paho_mqtt as mqtt;
 use protobuf::Message;
-
-use crate::{
-    mqtt_connection::{self, MqttConnection},
-    status_publishing::StatusPublisher,
+use uprotocol_sdk::{
+    transport::{builder::UAttributesBuilder, datamodel::UTransport},
+    uprotocol::{Data, UPayload, UPayloadFormat, UPriority, UUri},
 };
 
-const TOPIC_TELEMETRY: &str = "telemetry/?content-type=application%2Fvnd.google.protobuf";
+use mqtt_transport::mqtt5_transport::{self, Mqtt5Transport};
+
+use crate::status_publishing::StatusPublisher;
+
+const PUBLISH_TOPIC_TEMPLATE: &str = "/fms-forwarder/1/uplink.telemetry#VehicleStatus";
 
 /// Adds arguments to an existing command line which can be
 /// used to configure the connection to a Hono MQTT protocol adapter.
 ///
-/// See [`mqtt_connection::add_command_line_args`]
+/// See [`mqtt5_transport::add_command_line_args`]
 ///
 pub fn add_command_line_args(command: Command) -> Command {
-    mqtt_connection::add_command_line_args(command)
+    mqtt5_transport::add_command_line_args(command)
 }
-
 pub struct HonoPublisher {
-    mqtt_connection: MqttConnection,
+    transport: Mqtt5Transport,
 }
 
 impl HonoPublisher {
@@ -54,34 +54,39 @@ impl HonoPublisher {
     /// The publisher returned is configured to keep trying to (re-)connect to the configured
     /// MQTT endpoint using a client certificate of username/password credentials.
     pub async fn new(args: &ArgMatches) -> Result<Self, Box<dyn std::error::Error>> {
-        MqttConnection::new(args).await.map(|con| HonoPublisher {
-            mqtt_connection: con,
-        })
+        Mqtt5Transport::new(args)
+            .await
+            .map(|transport| HonoPublisher { transport })
     }
 }
 
 #[async_trait]
 impl StatusPublisher for HonoPublisher {
     async fn publish_vehicle_status(&self, vehicle_status: &VehicleStatus) {
+        // match Any::pack(vehicle_status).and_then(|any| any.write_to_bytes()) {
         match vehicle_status.write_to_bytes() {
             Ok(payload) => {
-                let msg = MessageBuilder::new()
-                    .topic(TOPIC_TELEMETRY)
-                    .payload(payload)
-                    .finalize();
-                match self.mqtt_connection.mqtt_client.publish(msg).await {
-                    Ok(_t) => debug!(
-                        "successfully published vehicle status to MQTT endpoint [uri: {}, topic: {}]",
-                        self.mqtt_connection.uri, TOPIC_TELEMETRY
+                let upayload = UPayload {
+                    data: Some(Data::Value(payload)),
+                    length: None,
+                    format: UPayloadFormat::UpayloadFormatProtobuf.into(),
+                };
+                let attribs = UAttributesBuilder::publish(UPriority::UpriorityCs1).build();
+                let source_topic = format!("//{}{}", vehicle_status.vin, PUBLISH_TOPIC_TEMPLATE);
+                let topic = UUri::from(source_topic.as_str());
+                match self.transport.send(topic, upayload, attribs).await {
+                    Ok(_) => debug!(
+                        "successfully published vehicle status [topic: {}]",
+                        source_topic,
                     ),
                     Err(e) => {
                         warn!(
-                            "error publishing vehicle status to MQTT endpoint [uri: {}, topic: {}]: {}",
-                            self.mqtt_connection.uri, TOPIC_TELEMETRY, e
+                            "error publishing vehicle status [topic: {}]: {}",
+                            source_topic,
+                            e.message()
                         );
                     }
                 };
-                return;
             }
             Err(e) => warn!(
                 "error serializing vehicle status to protobuf message: {}",

@@ -36,7 +36,7 @@ use rdkafka::consumer::Consumer;
 use rdkafka::message::{BorrowedHeaders, BorrowedMessage, Headers};
 use rdkafka::{ClientConfig, Message};
 
-const CONTENT_TYPE_PROTOBUF: &str = "application/vnd.google.protobuf";
+const CONTENT_TYPE_PROTOBUF: &str = "application/x-protobuf";
 
 const HEADER_NAME_ORIG_ADDRESS: &str = "orig_address";
 
@@ -179,7 +179,7 @@ async fn run_async_processor(args: &ArgMatches) {
     let mut client_config =
         get_kafka_client_config(args.get_one::<String>(PARAM_KAFKA_PROPERTIES_FILE).unwrap())
             .unwrap_or_else(|e| {
-                error!("failed to create Kafka client: {e}");
+                error!("failed to read Kafka client configuration: {e}");
                 process::exit(1);
             });
 

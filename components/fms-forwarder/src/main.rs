@@ -28,7 +28,6 @@ use status_publishing::StatusPublisher;
 use tokio::sync::mpsc;
 
 mod hono_publisher;
-mod mqtt_connection;
 mod status_publishing;
 mod vehicle_abstraction;
 

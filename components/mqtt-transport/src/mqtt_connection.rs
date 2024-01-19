@@ -19,7 +19,7 @@
 
 use clap::{Arg, ArgMatches, Command};
 use log::{error, info, warn};
-use mqtt::{AsyncClient, ConnectOptionsBuilder, CreateOptionsBuilder, SslOptionsBuilder};
+use mqtt::{AsyncClient, ConnectOptionsBuilder, CreateOptionsBuilder, SslOptionsBuilder, ConnectOptions};
 use paho_mqtt as mqtt;
 use std::{thread, time::Duration};
 
@@ -141,25 +141,38 @@ pub fn add_command_line_args(command: Command) -> Command {
 ///
 pub struct MqttConnection {
     pub mqtt_client: AsyncClient,
-    pub uri: String,
-    pub client_id: String,
+        pub client_id: String,
 }
 
 impl MqttConnection {
-    fn get_connect_options(
+
+    pub fn get_v5_connect_options(
+        _args: &ArgMatches,
+    ) -> Result<paho_mqtt::ConnectOptions, Box<dyn std::error::Error>> {
+        let mut connect_options_builder = ConnectOptionsBuilder::new_v5();
+        connect_options_builder.connect_timeout(Duration::from_secs(5));
+        connect_options_builder
+            .automatic_reconnect(Duration::from_secs(1), Duration::from_secs(16));
+        connect_options_builder.clean_start(true);
+        connect_options_builder.keep_alive_interval(Duration::from_secs(10));
+        connect_options_builder.max_inflight(10);
+        Ok(connect_options_builder.finalize())
+    }
+
+    pub fn get_v3_connect_options(
         args: &ArgMatches,
     ) -> Result<paho_mqtt::ConnectOptions, Box<dyn std::error::Error>> {
         let mut ssl_options_builder = SslOptionsBuilder::new();
         if let Some(path) = args.get_one::<String>(PARAM_CA_PATH) {
             if let Err(e) = ssl_options_builder.ca_path(path) {
-                error!("failed to set CA path on MQTT client: {e}");
-                return Err(Box::new(e));
+                error!("failed to set CA path on MQTT client: {}", e);
+                return Err(Box::from(e));
             }
         }
         if let Some(path) = args.get_one::<String>(PARAM_TRUST_STORE_PATH) {
             if let Err(e) = ssl_options_builder.trust_store(path) {
-                error!("failed to set trust store path on MQTT client: {e}");
-                return Err(Box::new(e));
+                error!("failed to set trust store path on MQTT client: {}", e);
+                return Err(Box::from(e));
             }
         }
         if let Some(flag) = args.get_one::<bool>(PARAM_ENABLE_HOSTNAME_VERIFICATION) {
@@ -181,19 +194,13 @@ impl MqttConnection {
             args.get_one::<String>(PARAM_DEVICE_KEY),
         ) {
             (_, _, Some(cert_path), Some(key_path)) => {
-                match ssl_options_builder.key_store(cert_path) {
-                    Ok(_builder) => (),
-                    Err(e) => {
-                        error!("failed to set client certificate for MQTT client: {e}");
-                        return Err(Box::new(e));
-                    }
+                if let Err(e) = ssl_options_builder.key_store(cert_path) {
+                    error!("failed to set client certificate for MQTT client: {}", e);
+                    return Err(Box::from(e));
                 }
-                match ssl_options_builder.private_key(key_path) {
-                    Ok(_builder) => (),
-                    Err(e) => {
-                        error!("failed to set private key for MQTT client: {e}");
-                        return Err(Box::new(e));
-                    }
+                if let Err(e) = ssl_options_builder.private_key(key_path) {
+                    error!("failed to set private key for MQTT client: {}", e);
+                    return Err(Box::from(e));
                 }
                 info!("using client certificate for authenticating to MQTT endpoint");
             }
@@ -211,15 +218,24 @@ impl MqttConnection {
         Ok(connect_options_builder.finalize())
     }
 
-    /// Creates a new connection to an MQTT endpoint.
+    /// Creates a new connection to an MQTT 3.1.1 endpoint.
     ///
     /// Expects to find parameters as defined by [`add_command_line_args`] in the passed
     /// in *args*.
     ///
     /// The connection returned is configured to keep trying to (re-)connect to the configured
     /// MQTT endpoint.
-    pub async fn new(args: &ArgMatches) -> Result<Self, Box<dyn std::error::Error>> {
-        let connect_options = MqttConnection::get_connect_options(args)?;
+    pub async fn connect_v3(args: &ArgMatches) -> Result<Self, Box<dyn std::error::Error>> {
+        let connect_options = MqttConnection::get_v3_connect_options(args)?;
+        MqttConnection::connect(args, connect_options).await
+    }
+
+    pub async fn connect_v5(args: &ArgMatches) -> Result<Self, Box<dyn std::error::Error>> {
+        let connect_options = MqttConnection::get_v5_connect_options(args)?;
+        MqttConnection::connect(args, connect_options).await
+    }
+
+    pub async fn connect(args: &ArgMatches, connect_options: ConnectOptions) -> Result<Self, Box<dyn std::error::Error>> {
         let mqtt_uri = args.get_one::<String>(PARAM_MQTT_URI).unwrap().to_owned();
         let client_id = args
             .get_one::<String>(PARAM_MQTT_CLIENT_ID)
@@ -246,7 +262,6 @@ impl MqttConnection {
                 );
                 Ok(MqttConnection {
                     mqtt_client: client,
-                    uri: mqtt_uri,
                     client_id,
                 })
             }

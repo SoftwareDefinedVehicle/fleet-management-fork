@@ -1,0 +1,18 @@
+[package]
+name = "mqtt-transport"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+documentation.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = { workspace = true }
+clap = { workspace = true, features = ["std", "env", "color", "help", "usage", "error-context", "suggestions"] }
+log = { workspace = true }
+paho-mqtt = { version = "0.12", default-features = false, features = [ "vendored-ssl" ] }
+uprotocol-sdk = { workspace = true }
+protobuf = { workspace = true }

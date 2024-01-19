@@ -22,7 +22,9 @@ members = [
     "fms-consumer",
     "fms-forwarder",
     "fms-server",
+    "hono-streamer-mqtt",
     "influx-client",
+    "mqtt-transport",
 ]
 resolver = "2"
 
@@ -41,13 +43,16 @@ clap = { version = "4.4", default-features = false }
 duration-str = { version = "0.7.0", default-features = false }
 env_logger = { version = "0.10" }
 fms-proto = { path = "fms-proto" }
+futures = { version = "0.3" }
 influx-client = { path = "influx-client", default-features = false }
 influxrs = { version = "2.0" }
 log = { version = "0.4" }
+mqtt-transport = { path = "mqtt-transport" }
 openssl-sys = { version = "0.9.92", default-features = false }
-protobuf = { version = "3" }
-protobuf-codegen = { version = "3" }
-protoc-bin-vendored = { version = "3" }
+paho-mqtt = { version = "0.12", default-features = false }
+protobuf = { version = "3.0" }
+protobuf-codegen = { version = "3.0" }
+protoc-bin-vendored = { version = "3.0" }
 # prost has no features
 prost = { version = "0.12" }
 # prost-types has no features
@@ -56,9 +61,11 @@ prost-types = { version = "0.12" }
 tokio = { version = "1.29" }
 tonic = { version = "0.10", default-features = false }
 tonic-build = { version = "0.10", default-features = false }
+uprotocol-sdk = { git = "https://github.com/eclipse-uprotocol/uprotocol-rust.git", branch = "main", version = "0.1.5" }
 
 [profile.release]
-lto = true                 # Link time optimization (dead code removal etc...)
+lto = true
+# Link time optimization (dead code removal etc...)
 opt-level = "s"
 codegen-units = 1
 incremental = false
