@@ -34,9 +34,9 @@ create_common_mqtt_client_env() {
   echo "Creating MQTT client properties file ${ENV_FILE_PATH} ..."
   cat <<EOF > "${ENV_FILE_PATH}"
 UP_MQTT_URI=mqtt://mosquitto:1883
-MQTT_URI=${URI}
-TRUST_STORE_PATH=${TRUST_STORE}
-ENABLE_HOSTNAME_VALIDATION=${ENABLE_HOSTNAME_VALIDATION}
+HONO_MQTT_URI=${URI}
+HONO_TRUST_STORE_PATH=${TRUST_STORE}
+HONO_ENABLE_HOSTNAME_VALIDATION=${ENABLE_HOSTNAME_VALIDATION}
 EOF
 }
 
@@ -55,8 +55,8 @@ create_mqtt_client_env() {
     "${TRUST_STORE}" \
     "${ENABLE_HOSTNAME_VALIDATION}"
   cat <<EOF >> "${ENV_FILE_PATH}"
-MQTT_USERNAME=${USERNAME}
-MQTT_PASSWORD=${PASSWORD}
+HONO_MQTT_USERNAME=${USERNAME}
+HONO_MQTT_PASSWORD=${PASSWORD}
 EOF
 }
 
@@ -77,8 +77,8 @@ create_mqtt_client_env_with_cert() {
   CONFIG_DIR_FMS_FORWARDER="${ENV_FILE_PATH%/*}/fms-forwarder"
   cp "${CLIENT_CERT_PATH}" "${CLIENT_KEY_PATH}" "${CONFIG_DIR_FMS_FORWARDER}"
   cat <<EOF >> "${ENV_FILE_PATH}"
-DEVICE_CERT=/app/config/$(basename "$CLIENT_CERT_PATH")
-DEVICE_KEY=/app/config/$(basename "$CLIENT_KEY_PATH")
+HONO_DEVICE_CERT=/app/config/$(basename "$CLIENT_CERT_PATH")
+HONO_DEVICE_KEY=/app/config/$(basename "$CLIENT_KEY_PATH")
 EOF
 }
 

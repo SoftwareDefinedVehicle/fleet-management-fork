@@ -6,7 +6,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use clap::{Arg, ArgMatches, Command};
 use log::{debug, error, info, trace, warn};
 use paho_mqtt::{
     AsyncClient, ConnectOptionsBuilder, CreateOptionsBuilder, Error, MessageBuilder, PropertyCode,
@@ -16,13 +15,9 @@ use uprotocol_sdk::{
     uprotocol::{Data, UAttributes, UCode, UEntity, UMessage, UPayload, UStatus, UUri},
 };
 
-pub mod uprotocol;
+use crate::mqtt_connection::MqttClientOptions;
 
-const PARAM_CA_PATH: &str = "up-ca-path";
-const PARAM_MQTT_URI: &str = "up-mqtt-uri";
-const PARAM_MQTT_USERNAME: &str = "up-mqtt-username";
-const PARAM_MQTT_PASSWORD: &str = "up-mqtt-password";
-const PARAM_TRUST_STORE_PATH: &str = "up-trust-store-path";
+pub mod uprotocol;
 
 const QOS: i32 = 1;
 
@@ -91,59 +86,8 @@ impl TopicListener {
     }
 }
 
-pub fn add_command_line_args(command: Command) -> Command {
-    command
-        .arg(
-            Arg::new(PARAM_MQTT_URI)
-                .value_parser(clap::builder::NonEmptyStringValueParser::new())
-                .long(PARAM_MQTT_URI)
-                .help("The URI of the MQTT broker to use as transport.")
-                .value_name("URI")
-                .required(false)
-                .default_value("mqtt://localhost:1883")
-                .env("UP_MQTT_URI"),
-        )
-        .arg(
-            Arg::new(PARAM_MQTT_USERNAME)
-                .value_parser(clap::builder::NonEmptyStringValueParser::new())
-                .long(PARAM_MQTT_USERNAME)
-                .help("The username for authenticating to the MQTT broker.")
-                .value_name("USERNAME")
-                .required(false)
-                .env("UP_MQTT_USERNAME"),
-        )
-        .arg(
-            Arg::new(PARAM_MQTT_PASSWORD)
-                .value_parser(clap::builder::NonEmptyStringValueParser::new())
-                .long(PARAM_MQTT_PASSWORD)
-                .help("The password for authenticating to the MQTT broker.")
-                .value_name("PWD")
-                .required(false)
-                .env("UP_MQTT_PASSWORD"),
-        )
-        .arg(
-            Arg::new(PARAM_CA_PATH)
-                .value_parser(clap::builder::NonEmptyStringValueParser::new())
-                .long(PARAM_CA_PATH)
-                .help("The path to a folder that contains PEM files for trusted certificate authorities.")
-                .value_name("PATH")
-                .required(false)
-                .env("UP_CA_PATH"),
-        )
-        .arg(
-            Arg::new(PARAM_TRUST_STORE_PATH)
-                .value_parser(clap::builder::NonEmptyStringValueParser::new())
-                .long(PARAM_TRUST_STORE_PATH)
-                .help("The path to a file that contains PEM encoded trusted certificates.")
-                .value_name("PATH")
-                .required(false)
-                .env("UP_TRUST_STORE_PATH"),
-        )
-}
-
 pub struct Mqtt5Transport {
     mqtt_client: AsyncClient,
-    pub uri: String,
 }
 
 impl Mqtt5Transport {
@@ -218,7 +162,7 @@ impl Mqtt5Transport {
         };
     }
 
-    pub fn get_v5_connect_options() -> Result<paho_mqtt::ConnectOptions, Box<dyn std::error::Error>>
+    fn get_connect_options() -> Result<paho_mqtt::ConnectOptions, Box<dyn std::error::Error>>
     {
         let mut connect_options_builder = ConnectOptionsBuilder::new_v5();
         connect_options_builder.connect_timeout(Duration::from_secs(5));
@@ -228,17 +172,15 @@ impl Mqtt5Transport {
         Ok(connect_options_builder.finalize())
     }
 
-    /// Creates a new transport for an MQTT 5 broker.
-    pub async fn new(args: &ArgMatches) -> Result<Self, Box<dyn std::error::Error>> {
-        let mqtt_uri = args.get_one::<String>(PARAM_MQTT_URI).unwrap().to_owned();
+    pub async fn new(mqtt_client_options: MqttClientOptions) -> Result<Self, Box<dyn std::error::Error>> {
+        info!("using MQTT client options: {}", mqtt_client_options);
+
         let client_state = MqttClientState {
             subscribed_topics: HashMap::new(),
             unused_subscription_ids: BTreeSet::from([1]),
         };
-        info!("connecting to MQTT broker at {}", mqtt_uri);
-        let connect_options = Self::get_v5_connect_options()?;
         match CreateOptionsBuilder::new()
-            .server_uri(&mqtt_uri)
+            .server_uri(mqtt_client_options.server_uri())
             .max_buffered_messages(50)
             .send_while_disconnected(true)
             .delete_oldest_messages(true)
@@ -247,23 +189,26 @@ impl Mqtt5Transport {
         {
             Err(e) => {
                 error!("failed to create MQTT client: {}", e);
-                Err(Box::new(e))
-            }
+                Err(Box::from(e))
+            },
             Ok(client) => {
-                client.set_message_callback(Self::on_message_received);
-                client
-                    .connect_with_callbacks(
-                        connect_options,
-                        Self::on_connect_success,
-                        Self::on_connect_failure,
-                    )
-                    .await
-                    .map(|_r| {
-                        Ok(Self {
-                            mqtt_client: client,
-                            uri: mqtt_uri,
-                        })
-                    })?
+                if let Ok(connect_options) = Self::get_connect_options() {
+                    client.set_message_callback(Self::on_message_received);
+                    client
+                        .connect_with_callbacks(
+                            connect_options,
+                            Self::on_connect_success,
+                            Self::on_connect_failure,
+                        )
+                        .await
+                        .map(|_r| {
+                            Ok(Self {
+                                mqtt_client: client,
+                            })
+                        })?
+                } else {
+                    Err(Box::from("failed to create MQTT connection options"))
+                }
             }
         }
     }
@@ -389,14 +334,14 @@ impl UTransport for Mqtt5Transport {
             Ok(_t) => {
                 debug!(
                     "successfully published message to MQTT endpoint [uri: {}, topic: {}]",
-                    self.uri, &mqtt_topic_name
+                    self.mqtt_client.server_uri(), &mqtt_topic_name
                 );
                 Ok(())
             }
             Err(e) => {
                 warn!(
                     "error publishing message to MQTT endpoint [uri: {}, topic: {}]: {}",
-                    self.uri, &mqtt_topic_name, e
+                    self.mqtt_client.server_uri(), &mqtt_topic_name, e
                 );
                 Err(UStatus::fail_with_code(
                     UCode::Unavailable,

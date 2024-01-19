@@ -24,6 +24,7 @@ use fms_proto::fms::VehicleStatus;
 use hono_publisher::HonoPublisher;
 use influx_client::writer::InfluxWriter;
 use log::{error, info};
+use mqtt_transport::mqtt_connection::MqttClientOptions;
 use status_publishing::StatusPublisher;
 use tokio::sync::mpsc;
 
@@ -40,6 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let version = option_env!("VERGEN_GIT_SEMVER_LIGHTWEIGHT")
         .unwrap_or(option_env!("VERGEN_GIT_SHA").unwrap_or("unknown"));
 
+    let mut uprotocol_transport_options = MqttClientOptions::using_prefix("up");
     let mut parser = Command::new("fms-forwarder")
         .arg_required_else_help(true)
         .version(version)
@@ -47,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     parser = vehicle_abstraction::add_command_line_args(parser);
     parser = parser
         .subcommand_required(true)
-        .subcommand(hono_publisher::add_command_line_args(
+        .subcommand(uprotocol_transport_options.add_command_line_args(
             Command::new(SUBCOMMAND_HONO).about("Forwards VSS data to Hono's MQTT adapter"),
         ))
         .subcommand(influx_client::connection::add_command_line_args(
@@ -59,7 +61,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let publisher: Box<dyn StatusPublisher> = match args.subcommand_name() {
         Some(SUBCOMMAND_HONO) => {
             let hono_args = args.subcommand_matches(SUBCOMMAND_HONO).unwrap();
-            match HonoPublisher::new(hono_args).await {
+            uprotocol_transport_options.parse_args(hono_args);
+            match HonoPublisher::new(uprotocol_transport_options).await {
                 Ok(writer) => Box::new(writer),
                 Err(e) => {
                     error!("failed to create Hono publisher: {}", e);
@@ -77,11 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        Some(_) => {
-            // cannot happen because subcommand is required
-            process::exit(1);
-        }
-        None => {
+        _ => {
             // cannot happen because subcommand is required
             process::exit(1);
         }

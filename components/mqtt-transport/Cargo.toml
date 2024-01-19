@@ -11,7 +11,7 @@ documentation.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-clap = { workspace = true, features = ["std", "env", "color", "help", "usage", "error-context", "suggestions"] }
+clap = { workspace = true, features = ["std", "string", "env", "color", "help", "usage", "error-context", "suggestions"] }
 log = { workspace = true }
 paho-mqtt = { version = "0.12", default-features = false, features = [ "vendored-ssl" ] }
 uprotocol-sdk = { workspace = true }

@@ -18,7 +18,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use clap::{ArgMatches, Command};
 use fms_proto::fms::VehicleStatus;
 use log::{debug, warn};
 use protobuf::Message;
@@ -27,20 +26,12 @@ use uprotocol_sdk::{
     uprotocol::{Data, UPayload, UPayloadFormat, UPriority, UUri},
 };
 
-use mqtt_transport::mqtt5_transport::{self, Mqtt5Transport};
+use mqtt_transport::{mqtt5_transport::Mqtt5Transport, mqtt_connection::MqttClientOptions};
 
 use crate::status_publishing::StatusPublisher;
 
 const PUBLISH_TOPIC_TEMPLATE: &str = "/fms-forwarder/1/uplink.telemetry#VehicleStatus";
 
-/// Adds arguments to an existing command line which can be
-/// used to configure the connection to a Hono MQTT protocol adapter.
-///
-/// See [`mqtt5_transport::add_command_line_args`]
-///
-pub fn add_command_line_args(command: Command) -> Command {
-    mqtt5_transport::add_command_line_args(command)
-}
 pub struct HonoPublisher {
     transport: Mqtt5Transport,
 }
@@ -53,8 +44,10 @@ impl HonoPublisher {
     ///
     /// The publisher returned is configured to keep trying to (re-)connect to the configured
     /// MQTT endpoint using a client certificate of username/password credentials.
-    pub async fn new(args: &ArgMatches) -> Result<Self, Box<dyn std::error::Error>> {
-        Mqtt5Transport::new(args)
+    pub async fn new(
+        mqtt_client_options: MqttClientOptions,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Mqtt5Transport::new(mqtt_client_options)
             .await
             .map(|transport| HonoPublisher { transport })
     }

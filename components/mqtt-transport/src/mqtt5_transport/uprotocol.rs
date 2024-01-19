@@ -58,7 +58,7 @@ pub fn get_umessage(mqtt_message: &paho_mqtt::Message) -> Result<UMessage, UStat
             "application/json" => UPayloadFormat::UpayloadFormatJson,
             _ => UPayloadFormat::UpayloadFormatUnspecified,
         },
-        None => UPayloadFormat::UpayloadFormatUnspecified,
+        None => UPayloadFormat::UpayloadFormatProtobuf,
     };
     let payload = UPayload {
         data: Some(Data::Value(mqtt_message.payload().to_vec())),
@@ -232,7 +232,7 @@ fn get_attributes(msg: &paho_mqtt::Message) -> Result<UAttributes, UStatus> {
 
 pub fn get_content_type(payload_format: &UPayloadFormat) -> &'static str {
     match payload_format {
-        UPayloadFormat::UpayloadFormatProtobuf => "application-x/protobuf",
+        UPayloadFormat::UpayloadFormatProtobuf => "application/x-protobuf",
         UPayloadFormat::UpayloadFormatJson => "application/json",
         _ => "application/octet-stream",
     }

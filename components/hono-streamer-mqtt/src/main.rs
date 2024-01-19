@@ -1,10 +1,10 @@
-use clap::{Arg, ArgMatches, Command};
+use clap::{Arg, Command};
 use json::JsonValue;
 use log::{debug, info, warn};
 
 use mqtt_transport::{
     mqtt5_transport::{self, Mqtt5Transport},
-    mqtt_connection::MqttConnection,
+    mqtt_connection::MqttClientOptions,
 };
 use paho_mqtt::MessageBuilder;
 use prost::Message;
@@ -161,7 +161,8 @@ impl HonoStreamer {
     ) -> Result<String, UStatus> {
         let topic =
             LongUriSerializer::deserialize(TOPIC_SUBSCRIPTION_NOTIFICATIONS.to_string()).unwrap();
-        let (subscription_update_sender, subscription_update_receiver) = mpsc::channel::<UMessage>();
+        let (subscription_update_sender, subscription_update_receiver) =
+            mpsc::channel::<UMessage>();
         let subscription_update_listener =
             Box::new(move |msg: Result<UMessage, UStatus>| match msg {
                 Ok(message) => {
@@ -197,9 +198,13 @@ impl HonoStreamer {
         Ok(sid)
     }
 
-    async fn run(&self, args: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-        let utransport = Mqtt5Transport::new(args).await?;
-        let hono_connection = MqttConnection::connect_v3(args).await?;
+    async fn run(
+        &self,
+        mqtt_utransport_options: MqttClientOptions,
+        hono_client_options: MqttClientOptions,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let utransport = Mqtt5Transport::new(mqtt_utransport_options).await?;
+        let hono_client = hono_client_options.connect_v3().await?;
 
         let (uplink_sender, uplink_recv) = std::sync::mpsc::channel::<UMessage>();
         let _sid = self
@@ -232,22 +237,18 @@ impl HonoStreamer {
                 builder = builder.payload(data);
             }
 
-            match hono_connection
-                .mqtt_client
-                .publish(builder.finalize())
-                .await
-            {
+            match hono_client.publish(builder.finalize()).await {
                 Ok(_t) => {
                     debug!(
                         "successfully published message to MQTT endpoint [uri: {}, topic: {}]",
-                        hono_connection.mqtt_client.server_uri(),
+                        hono_client.server_uri(),
                         hono_mqtt_topic
                     );
                 }
                 Err(e) => {
                     warn!(
                         "error publishing message to MQTT endpoint [uri: {}, topic: {}]: {}",
-                        hono_connection.mqtt_client.server_uri(),
+                        hono_client.server_uri(),
                         hono_mqtt_topic,
                         e
                     );
@@ -263,7 +264,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let version = option_env!("VERGEN_GIT_SEMVER_LIGHTWEIGHT")
         .unwrap_or(option_env!("VERGEN_GIT_SHA").unwrap_or("unknown"));
-
+    let mut hono_client_options = MqttClientOptions::using_prefix("hono");
+    let mut mqtt_utransport_options = MqttClientOptions::using_prefix("up");
     let mut parser = Command::new("hono-streamer-mqtt")
         // .arg_required_else_help(true)
         .version(version)
@@ -277,13 +279,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .env("VIN")
                 .default_value("YV2E4C3A5VB180691"),
         );
-    parser = mqtt_transport::mqtt5_transport::add_command_line_args(parser);
-    parser = mqtt_transport::mqtt_connection::add_command_line_args(parser);
+    parser = mqtt_utransport_options.add_command_line_args(parser);
+    parser = hono_client_options.add_command_line_args(parser);
 
     let args = parser.get_matches();
+    mqtt_utransport_options.parse_args(&args);
+    hono_client_options.parse_args(&args);
     info!("starting Hono uProtocol Streamer");
     let streamer = HonoStreamer {
         vin: args.get_one::<String>("vin").unwrap().clone(),
     };
-    streamer.run(&args).await
+    streamer
+        .run(mqtt_utransport_options, hono_client_options)
+        .await
 }
