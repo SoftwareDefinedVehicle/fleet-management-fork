@@ -36,7 +36,6 @@ accepted = [
 #targets = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
-no-clearly-defined = true
 workarounds = ["chrono", "prost", "ring", "rustls", "tonic"]
 private = { ignore = true }
 

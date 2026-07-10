@@ -101,7 +101,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = Arc::new(VehicleStatusListener { influx_writer });
     info!(
         "Registering listener for vehicle status events [source filter: {}]",
-        &command.vehicle_status_topic_filter.to_uri(false)
+        command.vehicle_status_topic_filter.to_uri(false)
     );
     transport
         .register_listener(&command.vehicle_status_topic_filter, None, listener)
